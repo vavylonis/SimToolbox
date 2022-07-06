@@ -1445,18 +1445,27 @@ void SylinderSystem::collectLinkBilateral() {
                         std::exit(1);
                     }
                 }
+                
+                //dmr518, hardcoding primary linker parameters and position, 20220624
                 // sylinders are not treated as spheres for bilateral constraints
                 // constraint is always added between Pp and Qm
                 // constraint target length is radiusI + radiusJ + runConfig.linkGap
+                
+                // see 20220601 presentation for these definitions
+                const double d1 = 0.01; // um
+                const double l0_1 = 0.01; // um
+                const double k1 = 500; // pN/um
+                
                 const Evec3 directionI = ECmapq(syI.orientation) * Evec3(0, 0, 1);
-                const Evec3 Pp = centerI + directionI * (0.5 * syI.length); // plus end
+                const Evec3 Pp = centerI + directionI * (0.5 * syI.length - d1); // plus end
                 const Evec3 directionJ = ECmap3(syJ.direction);
-                const Evec3 Qm = centerJ - directionJ * (0.5 * syJ.length);
+                const Evec3 Qm = centerJ - directionJ * (0.5 * syJ.length - d1);
                 const Evec3 Ploc = Pp;
                 const Evec3 Qloc = Qm;
                 const Evec3 rvec = Qloc - Ploc;
                 const double rnorm = rvec.norm();
-                const double delta0 = rnorm - syI.radius - syJ.radius - runConfig.linkGap;
+                //const double delta0 = rnorm - syI.radius - syJ.radius - runConfig.linkGap;
+                const double delta0 = rnorm - syI.radius - syJ.radius - l0_1;
                 const double gamma = delta0 < 0 ? -delta0 : 0;
                 const Evec3 normI = (Ploc - Qloc).normalized();
                 const Evec3 normJ = -normI;
@@ -1469,12 +1478,54 @@ void SylinderSystem::collectLinkBilateral() {
                                          normI.data(), normJ.data(), // direction of collision force
                                          posI.data(), posJ.data(), // location of collision relative to particle center
                                          Ploc.data(), Qloc.data(), // location of collision in lab frame
-                                         false, true, runConfig.linkKappa, 0.0);
+                                         false, true, k1, 0.0);
                 Emat3 stressIJ;
                 CalcSylinderNearForce::collideStress(directionI, directionJ, centerI, centerJ, syI.length, syJ.length,
                                                      syI.radius, syJ.radius, 1.0, Ploc, Qloc, stressIJ);
                 conBlock.setStress(stressIJ);
                 conQue.push_back(conBlock);
+                
+                
+                
+                // dmr518, adding in secondary linkers with hardcoded parameters and position, 20220624
+                // adding an secondary bilateral constraint for semiflexbile filaments
+                // sylinders are not treated as spheres for bilateral constraints
+                // constraint is always added between Pp and Qm
+                // constraint target length is radiusI + radiusJ + runConfig.linkGap
+                
+                // see 20220601 presentation for these definitions
+                const double d2 = 0.1465; // um
+                const double l0_2 = 0.323; // um
+                const double k2 = 92; // pN/um
+                
+                //const Evec3 directionI = ECmapq(syI.orientation) * Evec3(0, 0, 1);
+                const Evec3 Pp_secondary = centerI + directionI * (0.5 * syI.length - d2); // plus end
+                //const Evec3 directionJ = ECmap3(syJ.direction);
+                const Evec3 Qm_secondary = centerJ - directionJ * (0.5 * syJ.length - d2);
+                const Evec3 Ploc_secondary = Pp_secondary;
+                const Evec3 Qloc_secondary = Qm_secondary;
+                const Evec3 rvec_secondary = Qloc_secondary - Ploc_secondary;
+                const double rnorm_secondary = rvec_secondary.norm();
+                //const double delta0_secondary = rnorm_secondary - syI.radius - syJ.radius - runConfig.linkGap;
+                const double delta0_secondary = rnorm_secondary - syI.radius - syJ.radius - l0_2;
+                const double gamma_secondary = delta0_secondary < 0 ? -delta0_secondary : 0;
+                const Evec3 normI_secondary = (Ploc_secondary - Qloc_secondary).normalized();
+                const Evec3 normJ_secondary = -normI_secondary;
+                const Evec3 posI_secondary = Ploc_secondary - centerI;
+                const Evec3 posJ_secondary = Qloc_secondary - centerJ;
+                ConstraintBlock conBlock_secondary(delta0_secondary, gamma_secondary,              // current separation, initial guess of gamma
+                                         syI.gid, syJ.gid,           //
+                                         syI.globalIndex,            //
+                                         syJ.globalIndex,            //
+                                         normI_secondary.data(), normJ_secondary.data(), // direction of collision force
+                                         posI_secondary.data(), posJ_secondary.data(), // location of collision relative to particle center
+                                         Ploc_secondary.data(), Qloc_secondary.data(), // location of collision in lab frame
+                                         false, true, k2, 0.0);
+                Emat3 stressIJ_secondary;
+                CalcSylinderNearForce::collideStress(directionI, directionJ, centerI, centerJ, syI.length, syJ.length,
+                                                     syI.radius, syJ.radius, 1.0, Ploc_secondary, Qloc_secondary, stressIJ_secondary);
+                conBlock_secondary.setStress(stressIJ_secondary);
+                conQue.push_back(conBlock_secondary);
             }
         }
     }
